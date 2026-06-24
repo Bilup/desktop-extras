@@ -1,1 +1,1 @@
-# desktop-extras
+Extra tools for Bilup Desktop.
