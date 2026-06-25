@@ -1,0 +1,207 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'version.json'
+  workflow_dispatch:
+
+env:
+  TEST_PORT: 9000
+  NODE_VERSION: '16'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: node16-win-x64
+            output: bilup-desktop-extras.exe
+            asset-name: bilup-desktop-extras-windows.exe
+          - os: macos-latest
+            target: node16-macos-x64
+            output: bilup-desktop-extras-macos
+            asset-name: bilup-desktop-extras-macos
+          - os: ubuntu-latest
+            target: node16-linux-x64
+            output: bilup-desktop-extras-linux
+            asset-name: bilup-desktop-extras-linux
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Get version from version.json
+        id: version
+        run: echo "version=$(node -p "require('./version.json').version")" >> $GITHUB_OUTPUT
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Cache pkg
+        uses: actions/cache@v4
+        with:
+          path: ~/.pkg-cache
+          key: ${{ runner.os }}-pkg-${{ hashFiles('package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pkg-
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Install pkg
+        run: npm install -g pkg
+      
+      - name: Build executable
+        run: pkg . --output ${{ matrix.output }} --target ${{ matrix.target }}
+      
+      - name: Test on Windows
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath ".\${{ matrix.output }}" -ArgumentList "--peerjs-port ${{ env.TEST_PORT }}" -PassThru
+          Start-Sleep -Seconds 5
+          $portUsed = Get-NetTCPConnection -LocalPort ${{ env.TEST_PORT }} -ErrorAction SilentlyContinue
+          if ($portUsed) {
+            Write-Host "✓ Server started successfully on port ${{ env.TEST_PORT }}"
+          } else {
+            Write-Host "✗ Failed to start server on port ${{ env.TEST_PORT }}"
+            Stop-Process -Id $process.Id -ErrorAction SilentlyContinue
+            exit 1
+          }
+          Stop-Process -Id $process.Id -ErrorAction SilentlyContinue
+      
+      - name: Test on macOS/Linux
+        if: matrix.os != 'windows-latest'
+        run: |
+          chmod +x ${{ matrix.output }}
+          
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            xattr -d com.apple.quarantine ${{ matrix.output }} 2>/dev/null || true
+          fi
+          
+          ./${{ matrix.output }} --peerjs-port ${{ env.TEST_PORT }} > /dev/null 2>&1 &
+          SERVER_PID=$!
+          
+          sleep 5
+          
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            if lsof -Pi :${{ env.TEST_PORT }} -sTCP:LISTEN -t >/dev/null 2>&1; then
+              echo "✓ Server started successfully on port ${{ env.TEST_PORT }}"
+              kill $SERVER_PID 2>/dev/null || true
+            else
+              echo "✗ Failed to start server on port ${{ env.TEST_PORT }}"
+              kill $SERVER_PID 2>/dev/null || true
+              exit 1
+            fi
+          else
+            if ss -tlnp | grep :${{ env.TEST_PORT }} > /dev/null 2>&1; then
+              echo "✓ Server started successfully on port ${{ env.TEST_PORT }}"
+              kill $SERVER_PID 2>/dev/null || true
+            else
+              echo "✗ Failed to start server on port ${{ env.TEST_PORT }}"
+              kill $SERVER_PID 2>/dev/null || true
+              exit 1
+            fi
+          fi
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset-name }}-v${{ steps.version.outputs.version }}
+          path: ${{ matrix.output }}
+          retention-days: 7
+  
+  create-release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Get version from version.json
+        id: version
+        run: echo "version=$(node -p "require('./version.json').version")" >> $GITHUB_OUTPUT
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: List downloaded files
+        run: ls -la artifacts/
+      
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          release_name: Release v${{ steps.version.outputs.version }}
+          body: |
+            ## What's Changed
+            
+            - PeerJS signaling server for local network communication
+            - Auto-detect local IP address
+            - Custom port support via `--peerjs-port` or `-p`
+            
+            ## Downloads
+            
+            | Platform | File |
+            |----------|------|
+            | Windows | bilup-desktop-extras-windows.exe |
+            | macOS | bilup-desktop-extras-macos |
+            | Linux | bilup-desktop-extras-linux |
+            
+            ## Usage
+            
+            ```bash
+            # Windows
+            bilup-desktop-extras-windows.exe --peerjs-port 8080
+            
+            # macOS/Linux
+            chmod +x bilup-desktop-extras-macos
+            ./bilup-desktop-extras-macos --peerjs-port 8080
+            ```
+          draft: false
+          prerelease: false
+      
+      - name: Upload Windows Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: artifacts/bilup-desktop-extras-windows.exe-v${{ steps.version.outputs.version }}/bilup-desktop-extras.exe
+          asset_name: bilup-desktop-extras-windows.exe
+          asset_content_type: application/octet-stream
+      
+      - name: Upload macOS Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: artifacts/bilup-desktop-extras-macos-v${{ steps.version.outputs.version }}/bilup-desktop-extras-macos
+          asset_name: bilup-desktop-extras-macos
+          asset_content_type: application/octet-stream
+      
+      - name: Upload Linux Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: artifacts/bilup-desktop-extras-linux-v${{ steps.version.outputs.version }}/bilup-desktop-extras-linux
+          asset_name: bilup-desktop-extras-linux
+          asset_content_type: application/octet-stream
