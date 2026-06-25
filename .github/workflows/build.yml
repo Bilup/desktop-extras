@@ -4,7 +4,13 @@ on:
   push:
     branches:
       - main
-      # - master
+  workflow_dispatch:
+    inputs:
+      peerjs-port:
+        description: 'Default PeerJS server port'
+        required: true
+        default: '8080'
+        type: string
 
 jobs:
   build-windows:
@@ -28,6 +34,18 @@ jobs:
       
       - name: Build executable
         run: pkg . --output bilup-desktop-extras.exe --target node16-win-x64
+      
+      - name: Test with custom port
+        run: |
+          Start-Process -FilePath .\bilup-desktop-extras.exe -ArgumentList "--peerjs-port 9000" -PassThru
+          Start-Sleep -Seconds 3
+          $portUsed = Get-NetTCPConnection -LocalPort 9000 -ErrorAction SilentlyContinue
+          if ($portUsed) {
+            Write-Host "Server started successfully on port 9000"
+          } else {
+            Write-Host "Failed to start server on port 9000"
+            exit 1
+          }
       
       - name: Upload artifact
         uses: actions/upload-artifact@v4
