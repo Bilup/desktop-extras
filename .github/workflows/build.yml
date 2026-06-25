@@ -13,8 +13,23 @@ on:
         type: string
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            target: node16-win-x64
+            output: bilup-desktop-extras.exe
+            artifact-name: bilup-desktop-extras-windows
+          - os: macos-latest
+            target: node16-macos-x64
+            output: bilup-desktop-extras-macos
+            artifact-name: bilup-desktop-extras-macos
+          - os: ubuntu-latest
+            target: node16-linux-x64
+            output: bilup-desktop-extras-linux
+            artifact-name: bilup-desktop-extras-linux
     
     steps:
       - name: Checkout code
@@ -33,11 +48,12 @@ jobs:
         run: npm install -g pkg
       
       - name: Build executable
-        run: pkg . --output bilup-desktop-extras.exe --target node16-win-x64
+        run: pkg . --output ${{ matrix.output }} --target ${{ matrix.target }}
       
-      - name: Test with custom port
+      - name: Test on Windows
+        if: matrix.os == 'windows-latest'
         run: |
-          Start-Process -FilePath .\bilup-desktop-extras.exe -ArgumentList "--peerjs-port 9000" -PassThru
+          Start-Process -FilePath .\${{ matrix.output }} -ArgumentList "--peerjs-port 9000" -PassThru
           Start-Sleep -Seconds 3
           $portUsed = Get-NetTCPConnection -LocalPort 9000 -ErrorAction SilentlyContinue
           if ($portUsed) {
@@ -47,8 +63,34 @@ jobs:
             exit 1
           }
       
+      - name: Test on macOS
+        if: matrix.os == 'macos-latest'
+        run: |
+          chmod +x ${{ matrix.output }}
+          ./${{ matrix.output }} --peerjs-port 9000 &
+          sleep 3
+          if lsof -Pi :9000 -sTCP:LISTEN -t >/dev/null ; then
+            echo "Server started successfully on port 9000"
+          else
+            echo "Failed to start server on port 9000"
+            exit 1
+          fi
+      
+      - name: Test on Linux
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          chmod +x ${{ matrix.output }}
+          ./${{ matrix.output }} --peerjs-port 9000 &
+          sleep 3
+          if ss -tlnp | grep :9000 > /dev/null ; then
+            echo "Server started successfully on port 9000"
+          else
+            echo "Failed to start server on port 9000"
+            exit 1
+          fi
+      
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bilup-desktop-extras
-          path: bilup-desktop-extras.exe
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.output }}
