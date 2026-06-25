@@ -132,7 +132,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset-name }}-v${{ steps.version.outputs.version }}
+          name: ${{ matrix.asset-name }}
           path: ${{ matrix.output }}
           retention-days: 7
   
@@ -149,31 +149,35 @@ jobs:
         id: version
         run: echo "version=$(node -p "require('./version.json').version")" >> $GITHUB_OUTPUT
       
+      - name: Create release directory
+        run: mkdir -p release
+      
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: bilup-desktop-extras-windows.exe-v${{ steps.version.outputs.version }}
-          path: release
+          name: bilup-desktop-extras-windows.exe
+          path: release/windows
       
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
         with:
-          name: bilup-desktop-extras-macos-v${{ steps.version.outputs.version }}
-          path: release
+          name: bilup-desktop-extras-macos
+          path: release/macos
       
       - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
-          name: bilup-desktop-extras-linux-v${{ steps.version.outputs.version }}
-          path: release
+          name: bilup-desktop-extras-linux
+          path: release/linux
       
       - name: Prepare release files
         run: |
-          cd release
-          mv bilup-desktop-extras.exe bilup-desktop-extras-windows.exe || true
-          chmod +x bilup-desktop-extras-macos
-          chmod +x bilup-desktop-extras-linux
-          ls -la
+          cp release/windows/bilup-desktop-extras.exe release/bilup-desktop-extras-windows.exe
+          cp release/macos/bilup-desktop-extras-macos release/bilup-desktop-extras-macos
+          cp release/linux/bilup-desktop-extras-linux release/bilup-desktop-extras-linux
+          chmod +x release/bilup-desktop-extras-macos
+          chmod +x release/bilup-desktop-extras-linux
+          ls -la release/
       
       - name: Create Release
         uses: softprops/action-gh-release@v1
