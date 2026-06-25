@@ -8,6 +8,9 @@ on:
       - 'version.json'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   TEST_PORT: 9000
   NODE_VERSION: '16'
@@ -136,6 +139,8 @@ jobs:
   create-release:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -144,22 +149,37 @@ jobs:
         id: version
         run: echo "version=$(node -p "require('./version.json').version")" >> $GITHUB_OUTPUT
       
-      - name: Download all artifacts
+      - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          name: bilup-desktop-extras-windows.exe-v${{ steps.version.outputs.version }}
+          path: release
       
-      - name: List downloaded files
-        run: ls -la artifacts/
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: bilup-desktop-extras-macos-v${{ steps.version.outputs.version }}
+          path: release
+      
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: bilup-desktop-extras-linux-v${{ steps.version.outputs.version }}
+          path: release
+      
+      - name: Prepare release files
+        run: |
+          cd release
+          mv bilup-desktop-extras.exe bilup-desktop-extras-windows.exe || true
+          chmod +x bilup-desktop-extras-macos
+          chmod +x bilup-desktop-extras-linux
+          ls -la
       
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.version.outputs.version }}
-          release_name: Release v${{ steps.version.outputs.version }}
+          name: Release v${{ steps.version.outputs.version }}
           body: |
             ## What's Changed
             
@@ -187,33 +207,7 @@ jobs:
             ```
           draft: false
           prerelease: false
-      
-      - name: Upload Windows Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: artifacts/bilup-desktop-extras-windows.exe-v${{ steps.version.outputs.version }}/bilup-desktop-extras.exe
-          asset_name: bilup-desktop-extras-windows.exe
-          asset_content_type: application/octet-stream
-      
-      - name: Upload macOS Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: artifacts/bilup-desktop-extras-macos-v${{ steps.version.outputs.version }}/bilup-desktop-extras-macos
-          asset_name: bilup-desktop-extras-macos
-          asset_content_type: application/octet-stream
-      
-      - name: Upload Linux Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: artifacts/bilup-desktop-extras-linux-v${{ steps.version.outputs.version }}/bilup-desktop-extras-linux
-          asset_name: bilup-desktop-extras-linux
-          asset_content_type: application/octet-stream
+          files: |
+            release/bilup-desktop-extras-windows.exe
+            release/bilup-desktop-extras-macos
+            release/bilup-desktop-extras-linux
