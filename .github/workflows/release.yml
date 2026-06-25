@@ -80,40 +80,52 @@ jobs:
           }
           Stop-Process -Id $process.Id -ErrorAction SilentlyContinue
       
-      - name: Test on macOS/Linux
-        if: matrix.os != 'windows-latest'
+      - name: Test on macOS
+        if: matrix.os == 'macos-latest'
         run: |
           chmod +x ${{ matrix.output }}
-          
-          if [ "${{ matrix.os }}" = "macos-latest" ]; then
-            xattr -d com.apple.quarantine ${{ matrix.output }} 2>/dev/null || true
+          echo "File info:"
+          ls -la ${{ matrix.output }}
+          echo "Checking if port 9000 is available..."
+          if lsof -Pi :9000 -sTCP:LISTEN -t >/dev/null ; then
+            echo "Port 9000 is already in use"
+            exit 1
           fi
-          
-          ./${{ matrix.output }} --peerjs-port ${{ env.TEST_PORT }} > /dev/null 2>&1 &
+          echo "Bypassing macOS security..."
+          xattr -d com.apple.quarantine ${{ matrix.output }} 2>/dev/null || true
+          echo "Starting server..."
+          ./${{ matrix.output }} --peerjs-port 9000 > server.log 2>&1 &
           SERVER_PID=$!
-          
+          echo "Server PID: $SERVER_PID"
           sleep 5
-          
-          if [ "${{ matrix.os }}" = "macos-latest" ]; then
-            if lsof -Pi :${{ env.TEST_PORT }} -sTCP:LISTEN -t >/dev/null 2>&1; then
-              echo "✓ Server started successfully on port ${{ env.TEST_PORT }}"
-              kill $SERVER_PID 2>/dev/null || true
-            else
-              echo "✗ Failed to start server on port ${{ env.TEST_PORT }}"
-              kill $SERVER_PID 2>/dev/null || true
-              exit 1
-            fi
+          echo "Server log:"
+          cat server.log
+          echo "Process status:"
+          ps aux | grep -E "${{ matrix.output }}|peer" | grep -v grep
+          echo "Checking port..."
+          lsof -Pi :9000 -sTCP:LISTEN 2>/dev/null || netstat -an | grep 9000 || true
+          if lsof -Pi :9000 -sTCP:LISTEN -t >/dev/null ; then
+            echo "Server started successfully on port 9000"
+            kill $SERVER_PID 2>/dev/null || true
           else
-            if ss -tlnp | grep :${{ env.TEST_PORT }} > /dev/null 2>&1; then
-              echo "✓ Server started successfully on port ${{ env.TEST_PORT }}"
-              kill $SERVER_PID 2>/dev/null || true
-            else
-              echo "✗ Failed to start server on port ${{ env.TEST_PORT }}"
-              kill $SERVER_PID 2>/dev/null || true
-              exit 1
-            fi
+            echo "Failed to start server on port 9000"
+            kill $SERVER_PID 2>/dev/null || true
+            exit 1
           fi
       
+      - name: Test on Linux
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          chmod +x ${{ matrix.output }}
+          ./${{ matrix.output }} --peerjs-port 9000 &
+          sleep 3
+          if ss -tlnp | grep :9000 > /dev/null ; then
+            echo "Server started successfully on port 9000"
+          else
+            echo "Failed to start server on port 9000"
+            exit 1
+          fi
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
