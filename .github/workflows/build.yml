@@ -1,0 +1,36 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+      # - master
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Install pkg
+        run: npm install -g pkg
+      
+      - name: Build executable
+        run: pkg . --output bilup-desktop-extras.exe --target node16-win-x64
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bilup-desktop-extras
+          path: bilup-desktop-extras.exe

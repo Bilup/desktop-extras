@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const PeerServer = require('peerjs-nodejs');
+const { PeerServer } = require('peer');
 const os = require('os');
 
 function getLocalIP() {
