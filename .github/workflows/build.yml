@@ -67,12 +67,32 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           chmod +x ${{ matrix.output }}
-          ./${{ matrix.output }} --peerjs-port 9000 &
-          sleep 3
+          echo "File info:"
+          ls -la ${{ matrix.output }}
+          echo "Checking if port 9000 is available..."
+          if lsof -Pi :9000 -sTCP:LISTEN -t >/dev/null ; then
+            echo "Port 9000 is already in use"
+            exit 1
+          fi
+          echo "Bypassing macOS security..."
+          xattr -d com.apple.quarantine ${{ matrix.output }} 2>/dev/null || true
+          echo "Starting server..."
+          ./${{ matrix.output }} --peerjs-port 9000 > server.log 2>&1 &
+          SERVER_PID=$!
+          echo "Server PID: $SERVER_PID"
+          sleep 5
+          echo "Server log:"
+          cat server.log
+          echo "Process status:"
+          ps aux | grep -E "${{ matrix.output }}|peer" | grep -v grep
+          echo "Checking port..."
+          lsof -Pi :9000 -sTCP:LISTEN 2>/dev/null || netstat -an | grep 9000 || true
           if lsof -Pi :9000 -sTCP:LISTEN -t >/dev/null ; then
             echo "Server started successfully on port 9000"
+            kill $SERVER_PID 2>/dev/null || true
           else
             echo "Failed to start server on port 9000"
+            kill $SERVER_PID 2>/dev/null || true
             exit 1
           fi
       
