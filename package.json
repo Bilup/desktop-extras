@@ -1,6 +1,6 @@
 {
   "name": "bilup-desktop-extras",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Extra tools for Bilup Desktop",
   "main": "src/index.js",
   "bin": {

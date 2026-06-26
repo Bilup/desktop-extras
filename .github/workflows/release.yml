@@ -2,10 +2,8 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'version.json'
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -40,9 +38,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Get version from version.json
+      - name: Get version from tag
         id: version
-        run: echo "version=$(node -p "require('./version.json').version")" >> $GITHUB_OUTPUT
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
       
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -145,9 +143,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Get version from version.json
+      - name: Get version from tag
         id: version
-        run: echo "version=$(node -p "require('./version.json').version")" >> $GITHUB_OUTPUT
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
       
       - name: Create release directory
         run: mkdir -p release
@@ -179,36 +177,15 @@ jobs:
           chmod +x release/bilup-desktop-extras-linux
           ls -la release/
       
+      - name: Generate release body
+        run: node build/generate-release-body.js ${{ steps.version.outputs.version }}
+      
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: Release v${{ steps.version.outputs.version }}
-          body: |
-            ## What's Changed
-            
-            - PeerJS signaling server for local network communication
-            - Auto-detect local IP address
-            - Custom port support via `--peerjs-port` or `-p`
-            
-            ## Downloads
-            
-            | Platform | File |
-            |----------|------|
-            | Windows | bilup-desktop-extras-windows.exe |
-            | macOS | bilup-desktop-extras-macos |
-            | Linux | bilup-desktop-extras-linux |
-            
-            ## Usage
-            
-            ```bash
-            # Windows
-            bilup-desktop-extras-windows.exe --peerjs-port 8080
-            
-            # macOS/Linux
-            chmod +x bilup-desktop-extras-macos
-            ./bilup-desktop-extras-macos --peerjs-port 8080
-            ```
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body_path: build/release-body.md
           draft: false
           prerelease: false
           files: |
