@@ -1,5 +1,8 @@
 <!-- Release notes -->
 
+# 1.0.2
+- Added port check feature
+
 # 1.0.1
 - Fixed port detection logic
 - Improved error messages

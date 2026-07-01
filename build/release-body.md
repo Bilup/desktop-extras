@@ -1,15 +1,13 @@
 ## What's Changed
 
-- Fixed port detection logic
-- Improved error messages
+- Added port check feature
 
 ## Downloads
 
 | Platform | File |
 |----------|------|
 | Windows | bilup-desktop-extras-windows.exe |
-| macOS | bilup-desktop-extras-macos |
-| Linux | bilup-desktop-extras-linux |
+| macOS/Linux | bilup-desktop-extras-macos |
 
 ## Usage
 
