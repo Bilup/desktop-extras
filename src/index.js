@@ -18,7 +18,8 @@ function getLocalIP() {
 
 function parseArgs(args) {
     const options = {
-        port: 8080
+        port: 8080,
+        checkPort: null
     };
     
     for (let i = 0; i < args.length; i++) {
@@ -26,6 +27,12 @@ function parseArgs(args) {
             const port = parseInt(args[i + 1]);
             if (!isNaN(port) && port > 0 && port <= 65535) {
                 options.port = port;
+                i++;
+            }
+        } else if (args[i] === '--check-port' || args[i] === '-c') {
+            const port = parseInt(args[i + 1]);
+            if (!isNaN(port) && port > 0 && port <= 65535) {
+                options.checkPort = port;
                 i++;
             }
         }
@@ -68,6 +75,16 @@ async function findAvailablePort(startPort) {
 async function main() {
     const options = parseArgs(process.argv.slice(2));
     const localIP = getLocalIP();
+    
+    if (options.checkPort !== null) {
+        const isAvailable = await checkPort(options.checkPort);
+        if (isAvailable) {
+            console.log(`✅️ Port ${options.checkPort} is available`);
+        } else {
+            console.log(`❌️ Port ${options.checkPort} is in use`);
+        }
+        process.exit(0);
+    }
     
     const availablePort = await findAvailablePort(options.port);
     
